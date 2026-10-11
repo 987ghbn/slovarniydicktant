@@ -1075,10 +1075,11 @@
             box.innerHTML = '';
 
             // клетки слова
+            let wordBox = null;
             const letters = markCells.map((_, i) => {
                 const text = cellText(i);
                 const s = document.createElement('span');
-                s.textContent = text === '' ? '\u200b' : text;
+                s.textContent = text === '' ? '\u200b' : (text === ' ' ? '\u00a0' : text);
                 s.className = 'inline-block cursor-pointer select-none rounded-lg hover:bg-orange-50';
                 if (i === markGap) {
                     if (chosen === null) s.classList.add('text-orange-500');
@@ -1090,7 +1091,17 @@
                 }
                 if (markStart === i) s.style.backgroundColor = '#fed7aa';
                 s.onclick = () => clickLetter(i);
-                box.appendChild(s);
+                if (text === ' ') {
+                    box.appendChild(s);
+                    wordBox = null;
+                } else {
+                    if (!wordBox) {
+                        wordBox = document.createElement('span');
+                        wordBox.className = 'inline-block whitespace-nowrap';
+                        box.appendChild(wordBox);
+                    }
+                    wordBox.appendChild(s);
+                }
                 return s;
             });
 
