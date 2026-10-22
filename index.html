@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Словарные диктанты — Главная</title>
     <link rel="icon" type="image/png" href="logo.png">
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="tailwind.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body {
@@ -493,7 +493,9 @@
 
     <div id="startModal" class="fixed inset-0 bg-neutral-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 opacity-0 pointer-events-none transition-opacity duration-300">
         <div class="bg-white rounded-3xl max-w-md w-full p-8 shadow-2xl border border-orange-100 transform scale-95 transition-transform duration-300" id="startModalContainer">
-            <div class="w-12 h-12 rounded-2xl bg-orange-100 text-orange-600 flex items-center justify-center mb-5 font-bold text-xl">🚀</div>
+            <div class="w-16 h-16 rounded-2xl bg-white border border-orange-100 shadow-sm overflow-hidden flex items-center justify-center mb-5">
+                <img src="logo.png" alt="Словарные диктанты" class="w-full h-full object-contain p-1">
+            </div>
             <h3 class="text-2xl font-bold text-neutral-900 mb-2">Диктант готов к запуску!</h3>
             <p id="selectedRulesText" class="text-neutral-600 mb-6 leading-relaxed">Вы выбрали темы. Нажмите кнопку ниже, чтобы начать тренировку.</p>
             <div class="flex space-x-3">
@@ -682,6 +684,7 @@
             score = 0;
             mistakes = [];
             justScore = 0;
+            justTotal = 0;
             justMistakes = [];
 
             document.getElementById('dictResultBox').classList.add('hidden');
@@ -722,11 +725,13 @@
             const options = Math.random() < 0.5 ? [item.a, item.w] : [item.w, item.a];
             const box = document.getElementById('dictOptions');
             box.innerHTML = '';
+            const isSep = item.a === ' ' || item.w === ' ';   // слово на «слитно / раздельно»
             options.forEach(opt => {
                 const b = document.createElement('button');
-                b.textContent = opt === '' ? '\u00a0' : opt;
+                b.textContent = isSep ? (opt === ' ' ? 'раздельно' : 'слитно') : (opt === '' ? '\u00a0' : opt);
                 b.dataset.value = opt;
                 b.className = 'dict-option py-6 sm:py-8 rounded-3xl border-2 border-orange-200 bg-orange-50 text-4xl sm:text-5xl font-extrabold text-neutral-800 hover:bg-orange-100 hover:border-orange-400 transition-all';
+                if (isSep) b.style.fontSize = 'clamp(1.4rem, 4.5vw, 1.9rem)';
                 b.onclick = () => chooseOption(b, opt);
                 box.appendChild(b);
             });
@@ -771,6 +776,7 @@
 
         let chosen = null;        // выбранный на этом слове вариант (засчитывается при переходе дальше)
         let justScore = 0;        // у скольких слов правильно отмечено обоснование
+        let justTotal = 0;        // у скольких слов обоснование вообще требовалось
         let justMistakes = [];    // что не было отмечено
 
         function chooseOption(btn, value) {
@@ -860,6 +866,8 @@
             }
 
             // 2. обоснование: нужные отметки (лишние не мешают) и проверочное слово, если оно есть
+            if (requiredMarks(item).length === 0 && !item.check) return;   // у слова нет разбора: оценивается только выбор
+            justTotal++;
             const gap = item.q.indexOf('_');
             const missing = requiredMarks(item)
                 .filter(r => r.type === 'exception'
@@ -895,13 +903,13 @@
             const n = questions.length;
             stopTimer();
             const time = formatTime(Date.now() - dictStart);
-            const percent = Math.round(((score + justScore) / (2 * n)) * 100);
+            const percent = Math.round(((score + justScore) / (n + justTotal)) * 100);
             const pLetters = Math.round((score / n) * 100);
-            const pJust = Math.round((justScore / n) * 100);
+            const pJust = justTotal ? Math.round((justScore / justTotal) * 100) : 100;
 
             document.getElementById('dictPercent').textContent = `${percent}%`;
             document.getElementById('dictResultText').textContent =
-                `Буквы: ${score} из ${n} (${pLetters}%) · Обоснование: ${justScore} из ${n} (${pJust}%) · Время: ${time}`;
+                `Буквы: ${score} из ${n} (${pLetters}%) · ${justTotal ? `Обоснование: ${justScore} из ${justTotal} (${pJust}%)` : 'Обоснование: не требовалось'} · Время: ${time}`;
             const list = document.getElementById('dictMistakes');
             list.innerHTML = '';
 
@@ -950,6 +958,7 @@
         let marks = [];        // { type, from, to }: номера клеток
         let markTool = null;   // выбранный инструмент
         let markStart = null;  // первая клетка границы (ждём вторую)
+        let markSep = false;   // слово на «слитно / раздельно» (без разбора по составу)
 
         // что написано в клетке на экране
         function cellText(i) {
@@ -986,7 +995,9 @@
                 bar.appendChild(b);
             });
 
-            document.getElementById('dictMarkup').classList.remove('hidden');
+            markSep = item.a === ' ' || item.w === ' ';
+            // панель разбора показываем только тем словам, у которых есть разбор
+            document.getElementById('dictMarkup').classList.toggle('hidden', !(item.parts && item.parts.length));
             updateMarkTools();
             renderMarkup();
         }
@@ -1083,7 +1094,7 @@
                 s.className = 'inline-block cursor-pointer select-none rounded-lg hover:bg-orange-50';
                 if (i === markGap) {
                     if (chosen === null) s.classList.add('text-orange-500');
-                    if (text === '') {
+                    if (text === '' && !markSep) {
                         // выбрано «нет»: пустое место, но его можно отметить
                         s.style.minWidth = '0.4em';
                         s.style.borderBottom = '4px dotted #fdba74';
